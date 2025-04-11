@@ -1,24 +1,12 @@
-//! Example showing how to convert errors into responses.
+//! 이 예제는 요청 처리 중 발생할 수 있는 다양한 에러(JSON 파싱 실패, 외부 라이브러리 오류 등)를
+//! 커스텀 에러 타입으로 처리하고, HTTP 응답에 적절히 변환하는 방법을 보여줍니다.
+//! > POST 시 JSON을 다음과 같이 세팅합니다. {"name":"string value"}
+//! ! 3번 시도 시 한번은 에러로 떨어지도록 설계되었습니다.
 //!
-//! Run with
+//! 실행 방법:
 //!
-//! ```not_rust
+//! ```bash
 //! cargo run -p example-error-handling
-//! ```
-//!
-//! For successful requests the log output will be
-//!
-//! ```ignore
-//! DEBUG request{method=POST uri=/users matched_path="/users"}: tower_http::trace::on_request: started processing request
-//! DEBUG request{method=POST uri=/users matched_path="/users"}: tower_http::trace::on_response: finished processing request latency=0 ms status=200
-//! ```
-//!
-//! For failed requests the log output will be
-//!
-//! ```ignore
-//! DEBUG request{method=POST uri=/users matched_path="/users"}: tower_http::trace::on_request: started processing request
-//! ERROR request{method=POST uri=/users matched_path="/users"}: example_error_handling: error from time_library err=failed to get time
-//! DEBUG request{method=POST uri=/users matched_path="/users"}: tower_http::trace::on_response: finished processing request latency=0 ms status=500
 //! ```
 
 use std::{
@@ -43,42 +31,41 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() {
+    // ✨ 로그 필터 및 포맷 설정
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                // 환경변수에서 로깅 레벨을 설정하지 않은 경우 기본값 적용
                 format!("{}=debug,tower_http=debug", env!("CARGO_CRATE_NAME")).into()
             }),
         )
-        .with(tracing_subscriber::fmt::layer())
+        .with(tracing_subscriber::fmt::layer()) // 콘솔에 로그 출력
         .init();
 
+    // ✨ 앱 상태 초기화
     let state = AppState::default();
 
+    // ✨ 라우터 구성
     let app = Router::new()
-        // A dummy route that accepts some JSON but sometimes fails
-        .route("/users", post(users_create))
+        .route("/users", post(users_create)) // POST /users 경로
         .layer(
             TraceLayer::new_for_http()
-                // Create our own span for the request and include the matched path. The matched
-                // path is useful for figuring out which handler the request was routed to.
                 .make_span_with(|req: &Request| {
+                    // 로그용 트레이싱 span 설정
                     let method = req.method();
                     let uri = req.uri();
-
-                    // axum automatically adds this extension.
                     let matched_path = req
                         .extensions()
                         .get::<MatchedPath>()
-                        .map(|matched_path| matched_path.as_str());
+                        .map(|matched| matched.as_str());
 
                     tracing::debug_span!("request", %method, %uri, matched_path)
                 })
-                // By default `TraceLayer` will log 5xx responses but we're doing our specific
-                // logging of errors so disable that
-                .on_failure(()),
+                .on_failure(()), // 기본 5xx 로깅은 생략 (커스텀 로깅을 사용하므로)
         )
-        .with_state(state);
+        .with_state(state); // 상태 주입
 
+    // ✨ 서버 실행
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
         .unwrap();
@@ -86,35 +73,41 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
+/// 📦 상태 및 도메인 모델 정의
+
+// ✨ 앱의 글로벌 상태 정의
 #[derive(Default, Clone)]
 struct AppState {
-    next_id: Arc<AtomicU64>,
-    users: Arc<Mutex<HashMap<u64, User>>>,
+    next_id: Arc<AtomicU64>,               // 유저 ID 자동 증가
+    users: Arc<Mutex<HashMap<u64, User>>>, // 유저 목록 저장소
 }
 
+// ✨ 클라이언트로부터 받는 입력 구조체 (JSON 파싱 대상)
 #[derive(Deserialize)]
 struct UserParams {
     name: String,
 }
 
+// ✨ 응답용 유저 구조체
 #[derive(Serialize, Clone)]
 struct User {
     id: u64,
     name: String,
-    created_at: Timestamp,
+    created_at: Timestamp, // 외부 라이브러리 제공 타입
 }
 
+/// 🔄 사용자 생성 라우트 및 커스텀 JSON 추출기
+
+// ✨ POST /users 요청 처리 핸들러
 async fn users_create(
     State(state): State<AppState>,
-    // Make sure to use our own JSON extractor so we get input errors formatted in a way that
-    // matches our application
+    // 커스텀 JSON 추출기 사용
     AppJson(params): AppJson<UserParams>,
 ) -> Result<AppJson<User>, AppError> {
     let id = state.next_id.fetch_add(1, Ordering::SeqCst);
 
-    // We have implemented `From<time_library::Error> for AppError` which allows us to use `?` to
-    // automatically convert the error
-    let created_at = Timestamp::now()?;
+    // 외부 라이브러리 호출 시 오류 가능성 있음
+    let created_at = Timestamp::now()?; // Result → AppError::TimeError로 변환됨
 
     let user = User {
         id,
@@ -122,19 +115,21 @@ async fn users_create(
         created_at,
     };
 
+    // 유저 저장
     state.users.lock().unwrap().insert(id, user.clone());
 
+    // JSON으로 응답
     Ok(AppJson(user))
 }
 
-// Create our own JSON extractor by wrapping `axum::Json`. This makes it easy to override the
-// rejection and provide our own which formats errors to match our application.
-//
-// `axum::Json` responds with plain text if the input is invalid.
+/// 🧩 커스텀 JSON 추출기와 응답 변환
+
+// ✨ AppJson: Json 추출기 및 응답 타입 래퍼
 #[derive(FromRequest)]
-#[from_request(via(axum::Json), rejection(AppError))]
+#[from_request(via(axum::Json), rejection(AppError))] // 실패 시 AppError 반환
 struct AppJson<T>(T);
 
+// ✨ 응답으로 변환 가능하게 구현
 impl<T> IntoResponse for AppJson<T>
 where
     axum::Json<T>: IntoResponse,
@@ -144,36 +139,31 @@ where
     }
 }
 
-// The kinds of errors we can hit in our application.
+/// 🚨 공통 에러 타입 정의 및 응답 구현
+
+// ✨ 앱에서 발생 가능한 에러들을 열거
 enum AppError {
-    // The request body contained invalid JSON
-    JsonRejection(JsonRejection),
-    // Some error from a third party library we're using
-    TimeError(time_library::Error),
+    JsonRejection(JsonRejection),   // JSON 파싱 실패
+    TimeError(time_library::Error), // 외부 라이브러리 오류
 }
 
-// Tell axum how `AppError` should be converted into a response.
-//
-// This is also a convenient place to log errors.
+// ✨ 에러를 HTTP 응답으로 변환
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        // How we want errors responses to be serialized
         #[derive(Serialize)]
         struct ErrorResponse {
             message: String,
         }
 
+        // 상태코드 및 메시지를 결정
         let (status, message) = match self {
             AppError::JsonRejection(rejection) => {
-                // This error is caused by bad user input so don't log it
+                // 사용자 입력 오류 → 그대로 반환 (로깅은 생략)
                 (rejection.status(), rejection.body_text())
             }
             AppError::TimeError(err) => {
-                // Because `TraceLayer` wraps each request in a span that contains the request
-                // method, uri, etc we don't need to include those details here
+                // 내부 오류는 로그로 기록 (클라이언트에 상세 정보 제공하지 않음)
                 tracing::error!(%err, "error from time_library");
-
-                // Don't expose any details about the error to the client
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Something went wrong".to_owned(),
@@ -181,28 +171,31 @@ impl IntoResponse for AppError {
             }
         };
 
+        // 에러 메시지를 JSON으로 응답
         (status, AppJson(ErrorResponse { message })).into_response()
     }
 }
 
+// ✨ JSON 파싱 실패 → AppError로 자동 변환
 impl From<JsonRejection> for AppError {
     fn from(rejection: JsonRejection) -> Self {
         Self::JsonRejection(rejection)
     }
 }
 
+// ✨ 외부 에러 → AppError로 자동 변환
 impl From<time_library::Error> for AppError {
     fn from(error: time_library::Error) -> Self {
         Self::TimeError(error)
     }
 }
 
-// Imagine this is some third party library that we're using. It sometimes returns errors which we
-// want to log.
-mod time_library {
-    use std::sync::atomic::{AtomicU64, Ordering};
+/// ⏱️ 외부 라이브러리 시뮬레이션 (time_library)
 
+// 외부 라이브러리 시뮬레이션
+mod time_library {
     use serde::Serialize;
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     #[derive(Serialize, Clone)]
     pub struct Timestamp(u64);
@@ -211,11 +204,11 @@ mod time_library {
         pub fn now() -> Result<Self, Error> {
             static COUNTER: AtomicU64 = AtomicU64::new(0);
 
-            // Fail on every third call just to simulate errors
+            // 세 번 중 한 번은 일부러 실패 (테스트용)
             if COUNTER.fetch_add(1, Ordering::SeqCst) % 3 == 0 {
                 Err(Error::FailedToGetTime)
             } else {
-                Ok(Self(1337))
+                Ok(Self(1337)) // 고정값
             }
         }
     }
