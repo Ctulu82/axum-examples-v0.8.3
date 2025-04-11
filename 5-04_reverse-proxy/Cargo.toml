@@ -1,0 +1,10 @@
+[package]
+name = "example-reverse-proxy"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = "0.8.3"
+hyper = { version = "1.0.0", features = ["full"] }
+hyper-util = { version = "0.1.1", features = ["client-legacy"] }
+tokio = { version = "1", features = ["full"] }

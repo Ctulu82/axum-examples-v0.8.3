@@ -1,0 +1,10 @@
+[package]
+name = "auto-reload"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+axum = "0.8.3"
+listenfd = "1.0.1"
+tokio = { version = "1.0", features = ["full"] }
