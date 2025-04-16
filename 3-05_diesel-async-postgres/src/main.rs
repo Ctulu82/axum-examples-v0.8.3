@@ -23,10 +23,15 @@ use diesel::prelude::*;
 use diesel_async::{
     pooled_connection::AsyncDieselConnectionManager, AsyncPgConnection, RunQueryDsl,
 };
+use dotenv::dotenv;
+use std::env;
 use std::net::SocketAddr;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+// 🏗️ Diesel 테이블 선언 (macro)
 // normally part of your generated schema.rs file
+// Diesel은 매크로를 사용해서 이 테이블 정보를 기반으로 ORM을 생성합니다.
+// diesel-cli로 자동 생성 가능하며, 이 예제에서는 직접 선언되어 있음.
 table! {
     users (id) {
         id -> Integer,
@@ -35,6 +40,9 @@ table! {
     }
 }
 
+/// ✅ 모델 정의
+
+// DB에서 읽은 데이터를 응답으로 직렬화
 #[derive(serde::Serialize, Selectable, Queryable)]
 struct User {
     id: i32,
@@ -42,6 +50,7 @@ struct User {
     hair_color: Option<String>,
 }
 
+// API 요청(body)에서 받은 값을 DB에 삽입
 #[derive(serde::Deserialize, Insertable)]
 #[diesel(table_name = users)]
 struct NewUser {
@@ -61,13 +70,15 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
+    dotenv().ok(); // .env 파일 로드
+
     let db_url = std::env::var("DATABASE_URL").unwrap();
 
     // set up connection pool
     let config = AsyncDieselConnectionManager::<diesel_async::AsyncPgConnection>::new(db_url);
     let pool = bb8::Pool::builder().build(config).await.unwrap();
 
-    // build our application with some routes
+    // 🛣️ 라우터 구성
     let app = Router::new()
         .route("/user/list", get(list_users))
         .route("/user/create", post(create_user))
@@ -80,12 +91,14 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
+/// ✏️ POST /user/create
 async fn create_user(
     State(pool): State<Pool>,
     Json(new_user): Json<NewUser>,
 ) -> Result<Json<User>, (StatusCode, String)> {
     let mut conn = pool.get().await.map_err(internal_error)?;
 
+    // Diesel + 비동기 연결을 이용한 삽입
     let res = diesel::insert_into(users::table)
         .values(new_user)
         .returning(User::as_returning())
@@ -98,6 +111,7 @@ async fn create_user(
 // we can also write a custom extractor that grabs a connection from the pool
 // which setup is appropriate depends on your application
 struct DatabaseConnection(
+    // 커넥션 풀에서 연결 가져오는 추출기
     bb8::PooledConnection<'static, AsyncDieselConnectionManager<AsyncPgConnection>>,
 );
 
@@ -115,8 +129,9 @@ where
 
         Ok(Self(conn))
     }
-}
+} // 이렇게 만들면 다른 핸들러에서 State(pool) 없이 DatabaseConnection만 선언해도 됩니다.
 
+/// 🔍 GET /user/list
 async fn list_users(
     DatabaseConnection(mut conn): DatabaseConnection,
 ) -> Result<Json<Vec<User>>, (StatusCode, String)> {
@@ -128,11 +143,45 @@ async fn list_users(
     Ok(Json(res))
 }
 
-/// Utility function for mapping any error into a `500 Internal Server Error`
-/// response.
+/// 🔥 에러 헬퍼: 어떤 에러든 500 Internal Server Error로 매핑
 fn internal_error<E>(err: E) -> (StatusCode, String)
 where
     E: std::error::Error,
 {
     (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
 }
+
+// 🧪 예시 요청 (Postman)
+//
+// POST /user/create
+// { "name": "Alice", "hair_color": "black" }
+//
+// GET /user/list
+//[ { "id": 1, "name": "Alice", "hair_color": "black" } ]
+
+// PostgreSQL 설치
+// $ brew install postgresql
+//
+// Homebrew로 libpq 설치
+// $ brew install libpq
+//
+// 빌드 시 libpq 관련 문제 생길 경우 cargo clean && cargo build
+//
+// PostgreSQL 서비스 시작
+// $ brew services start postgresql
+//
+// PostgreSQL 서비스 중지
+// $ brew services stop postgresql
+//
+// PostgreSQl 콘솔로 접속하기
+// $ psql postgres
+//
+// 사용자 확인
+// postgres=# \du
+//
+// 사용자 생성 (예제 실행 전 최초 1회 필수!)
+// > postgres라는 유저명, password를 'thisispassword'로 설정하여 유저 생성
+// CREATE ROLE postgres WITH LOGIN PASSWORD 'thisispassword'
+//
+// 테이블 생성 (예제 실행 전 최초 1회 필수!)
+// CREATE DATABASE testdb OWNER postgres;
