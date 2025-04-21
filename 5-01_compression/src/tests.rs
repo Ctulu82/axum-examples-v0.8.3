@@ -1,3 +1,7 @@
+//! compression 예제 - tests.rs 한글 주석 포함
+//!
+//! 요청 바디 압축/해제 및 응답 압축 동작을 검증하는 통합 테스트입니다.
+
 use assert_json_diff::assert_json_eq;
 use axum::{
     body::{Body, Bytes},
@@ -12,10 +16,9 @@ use tower::ServiceExt;
 
 use super::*;
 
+/// ✅ 압축되지 않은 JSON 요청 테스트
 #[tokio::test]
 async fn handle_uncompressed_request_bodies() {
-    // Given
-
     let body = json();
 
     let compressed_request = http::Request::post("/")
@@ -23,20 +26,15 @@ async fn handle_uncompressed_request_bodies() {
         .body(json_body(&body))
         .unwrap();
 
-    // When
-
     let response = app().oneshot(compressed_request).await.unwrap();
-
-    // Then
 
     assert_eq!(response.status(), StatusCode::OK);
     assert_json_eq!(json_from_response(response).await, json());
 }
 
+/// ✅ gzip 압축 요청 테스트
 #[tokio::test]
 async fn decompress_gzip_request_bodies() {
-    // Given
-
     let body = compress_gzip(&json());
 
     let compressed_request = http::Request::post("/")
@@ -45,20 +43,15 @@ async fn decompress_gzip_request_bodies() {
         .body(Body::from(body))
         .unwrap();
 
-    // When
-
     let response = app().oneshot(compressed_request).await.unwrap();
-
-    // Then
 
     assert_eq!(response.status(), StatusCode::OK);
     assert_json_eq!(json_from_response(response).await, json());
 }
 
+/// ✅ brotli 압축 요청 테스트
 #[tokio::test]
 async fn decompress_br_request_bodies() {
-    // Given
-
     let body = compress_br(&json());
 
     let compressed_request = http::Request::post("/")
@@ -67,20 +60,15 @@ async fn decompress_br_request_bodies() {
         .body(Body::from(body))
         .unwrap();
 
-    // When
-
     let response = app().oneshot(compressed_request).await.unwrap();
-
-    // Then
 
     assert_eq!(response.status(), StatusCode::OK);
     assert_json_eq!(json_from_response(response).await, json());
 }
 
+/// ✅ zstd 압축 요청 테스트
 #[tokio::test]
 async fn decompress_zstd_request_bodies() {
-    // Given
-
     let body = compress_zstd(&json());
 
     let compressed_request = http::Request::post("/")
@@ -89,48 +77,36 @@ async fn decompress_zstd_request_bodies() {
         .body(Body::from(body))
         .unwrap();
 
-    // When
-
     let response = app().oneshot(compressed_request).await.unwrap();
-
-    // Then
 
     assert_eq!(response.status(), StatusCode::OK);
     assert_json_eq!(json_from_response(response).await, json());
 }
 
+/// ✅ 응답 압축 없이 동작 확인
 #[tokio::test]
 async fn do_not_compress_response_bodies() {
-    // Given
     let request = http::Request::post("/")
         .header(header::CONTENT_TYPE, "application/json")
         .body(json_body(&json()))
         .unwrap();
 
-    // When
-
     let response = app().oneshot(request).await.unwrap();
-
-    // Then
 
     assert_eq!(response.status(), StatusCode::OK);
     assert_json_eq!(json_from_response(response).await, json());
 }
 
+/// ✅ gzip 응답 압축 테스트
 #[tokio::test]
 async fn compress_response_bodies_with_gzip() {
-    // Given
     let request = http::Request::post("/")
         .header(header::CONTENT_TYPE, "application/json")
         .header(header::ACCEPT_ENCODING, "gzip")
         .body(json_body(&json()))
         .unwrap();
 
-    // When
-
     let response = app().oneshot(request).await.unwrap();
-
-    // Then
 
     assert_eq!(response.status(), StatusCode::OK);
     let response_body = byte_from_response(response).await;
@@ -143,20 +119,16 @@ async fn compress_response_bodies_with_gzip() {
     );
 }
 
+/// ✅ brotli 응답 압축 테스트
 #[tokio::test]
 async fn compress_response_bodies_with_br() {
-    // Given
     let request = http::Request::post("/")
         .header(header::CONTENT_TYPE, "application/json")
         .header(header::ACCEPT_ENCODING, "br")
         .body(json_body(&json()))
         .unwrap();
 
-    // When
-
     let response = app().oneshot(request).await.unwrap();
-
-    // Then
 
     assert_eq!(response.status(), StatusCode::OK);
     let response_body = byte_from_response(response).await;
@@ -168,20 +140,16 @@ async fn compress_response_bodies_with_br() {
     );
 }
 
+/// ✅ zstd 응답 압축 테스트
 #[tokio::test]
 async fn compress_response_bodies_with_zstd() {
-    // Given
     let request = http::Request::post("/")
         .header(header::CONTENT_TYPE, "application/json")
         .header(header::ACCEPT_ENCODING, "zstd")
         .body(json_body(&json()))
         .unwrap();
 
-    // When
-
     let response = app().oneshot(request).await.unwrap();
-
-    // Then
 
     assert_eq!(response.status(), StatusCode::OK);
     let response_body = byte_from_response(response).await;
@@ -192,6 +160,7 @@ async fn compress_response_bodies_with_zstd() {
     );
 }
 
+/// ✅ 테스트에 사용될 샘플 JSON 객체 생성
 fn json() -> Value {
     json!({
       "name": "foo",
@@ -202,43 +171,47 @@ fn json() -> Value {
     })
 }
 
+/// JSON 객체를 요청 바디로 변환
 fn json_body(input: &Value) -> Body {
     Body::from(serde_json::to_vec(&input).unwrap())
 }
 
+/// 응답 바디에서 JSON 디코딩
 async fn json_from_response(response: Response) -> Value {
     let body = byte_from_response(response).await;
     body_as_json(body)
 }
 
+/// 응답 바디에서 원시 바이트 추출
 async fn byte_from_response(response: Response) -> Bytes {
     axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
         .unwrap()
 }
 
+/// 바이트 → JSON 역직렬화
 fn body_as_json(body: Bytes) -> Value {
     serde_json::from_slice(body.as_ref()).unwrap()
 }
 
+/// gzip 압축 함수
 fn compress_gzip(json: &Value) -> Vec<u8> {
     let request_body = serde_json::to_vec(&json).unwrap();
-
     let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
     encoder.write_all(&request_body).unwrap();
     encoder.finish().unwrap()
 }
 
+/// brotli 압축 함수
 fn compress_br(json: &Value) -> Vec<u8> {
     let request_body = serde_json::to_vec(&json).unwrap();
     let mut result = Vec::new();
-
     let params = BrotliEncoderParams::default();
     let _ = brotli::enc::BrotliCompress(&mut &request_body[..], &mut result, &params).unwrap();
-
     result
 }
 
+/// zstd 압축 함수
 fn compress_zstd(json: &Value) -> Vec<u8> {
     let request_body = serde_json::to_vec(&json).unwrap();
     zstd::stream::encode_all(std::io::Cursor::new(request_body), 4).unwrap()
