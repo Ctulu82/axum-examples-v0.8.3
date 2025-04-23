@@ -1,51 +1,87 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
     <head>
-        <meta charset="UTF-8">
+        <meta charset="UTF-8" />
         <title>WebSocket Chat</title>
     </head>
     <body>
         <h1>WebSocket Chat Example</h1>
 
-        <input id="username" style="display:block; width:100px; box-sizing: border-box" type="text" placeholder="username">
+        <!-- 사용자 이름 입력 -->
+        <input
+            id="username"
+            style="display: block; width: 100px; box-sizing: border-box"
+            type="text"
+            placeholder="username"
+        />
+
+        <!-- 채팅방 입장 버튼 -->
         <button id="join-chat" type="button">Join Chat</button>
-        <textarea id="chat" style="display:block; width:600px; height:400px; box-sizing: border-box" cols="30" rows="10"></textarea>
-        <input id="input" style="display:block; width:600px; box-sizing: border-box" type="text" placeholder="chat">
+
+        <!-- 채팅 로그 출력 -->
+        <textarea
+            id="chat"
+            style="
+                display: block;
+                width: 600px;
+                height: 400px;
+                box-sizing: border-box;
+            "
+            cols="30"
+            rows="10"
+        ></textarea>
+
+        <!-- 채팅 메시지 입력 -->
+        <input
+            id="input"
+            style="display: block; width: 600px; box-sizing: border-box"
+            type="text"
+            placeholder="chat"
+        />
 
         <script>
+            // DOM 요소 참조
             const username = document.querySelector("#username");
             const join_btn = document.querySelector("#join-chat");
             const textarea = document.querySelector("#chat");
             const input = document.querySelector("#input");
 
-            join_btn.addEventListener("click", function(e) {
-                this.disabled = true;
+            // 채팅방 입장 버튼 클릭 시 실행
+            join_btn.addEventListener("click", function (e) {
+                this.disabled = true; // 중복 클릭 방지
 
-                const websocket = new WebSocket("ws://localhost:3000/websocket");
+                // WebSocket 연결 생성
+                const websocket = new WebSocket(
+                    "ws://localhost:3000/websocket",
+                );
 
-                websocket.onopen = function() {
+                // 연결 성공 시 사용자 이름 전송
+                websocket.onopen = function () {
                     console.log("connection opened");
                     websocket.send(username.value);
-                }
+                };
 
                 const btn = this;
 
-                websocket.onclose = function() {
+                // 연결 종료 시 버튼 재활성화
+                websocket.onclose = function () {
                     console.log("connection closed");
                     btn.disabled = false;
-                }
+                };
 
-                websocket.onmessage = function(e) {
-                    console.log("received message: "+e.data);
-                    textarea.value += e.data+"\r\n";
-                }
+                // 서버로부터 메시지 수신 시 텍스트 영역에 출력
+                websocket.onmessage = function (e) {
+                    console.log("received message: " + e.data);
+                    textarea.value += e.data + "\r\n";
+                };
 
-                input.onkeydown = function(e) {
+                // Enter 키 누르면 메시지 전송
+                input.onkeydown = function (e) {
                     if (e.key == "Enter") {
                         websocket.send(input.value);
-                        input.value = "";
+                        input.value = ""; // 입력창 초기화
                     }
-                }
+                };
             });
         </script>
     </body>

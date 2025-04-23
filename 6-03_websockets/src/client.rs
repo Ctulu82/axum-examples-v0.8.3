@@ -17,6 +17,7 @@ use std::time::Instant;
 use tokio_tungstenite::tungstenite::Utf8Bytes;
 
 // we will use tungstenite for websocket client impl (same library as what axum is using)
+// WebSocket 연결용 클라이언트 라이브러리
 use tokio_tungstenite::{
     connect_async,
     tungstenite::protocol::{frame::coding::CloseCode, CloseFrame, Message},
@@ -24,6 +25,8 @@ use tokio_tungstenite::{
 
 const N_CLIENTS: usize = 2; //set to desired number
 const SERVER: &str = "ws://127.0.0.1:3000/ws";
+
+/// 🧪 main() : N개의 클라이언트 생성
 
 #[tokio::main]
 async fn main() {
@@ -45,6 +48,8 @@ async fn main() {
     );
 }
 
+/// 🚀 spawn_client() : 클라이언트가 서버에 연결하고 메시지 송수신
+
 //creates a client. quietly exits on failure.
 async fn spawn_client(who: usize) {
     let ws_stream = match connect_async(SERVER).await {
@@ -64,6 +69,7 @@ async fn spawn_client(who: usize) {
     let (mut sender, mut receiver) = ws_stream.split();
 
     //we can ping the server for start
+    // 서버에 Ping 전송
     sender
         .send(Message::Ping(axum::body::Bytes::from_static(
             b"Hello, Server!",
@@ -72,6 +78,7 @@ async fn spawn_client(who: usize) {
         .expect("Can not send!");
 
     //spawn an async sender to push some more messages into the server
+    // 메시지 송신 task
     let mut send_task = tokio::spawn(async move {
         for i in 1..30 {
             // In any websocket error, break loop.
@@ -101,6 +108,7 @@ async fn spawn_client(who: usize) {
     });
 
     //receiver just prints whatever it gets
+    // 메시지 수신 task
     let mut recv_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = receiver.next().await {
             // print message and break if instructed to do so
@@ -120,6 +128,8 @@ async fn spawn_client(who: usize) {
         }
     }
 }
+
+/// 🧾 메시지 처리 함수
 
 /// Function to handle messages we get (with a slight twist that Frame variant is visible
 /// since we are working with the underlying tungstenite library directly without axum here).

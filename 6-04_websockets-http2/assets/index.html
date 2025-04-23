@@ -1,7 +1,12 @@
 <p>Open this page in two windows and try sending some messages!</p>
+<!-- 메시지를 입력하고 전송하는 폼 -->
 <form action="javascript:void(0)">
-    <input type="text" name="content" required>
+    <input type="text" name="content" required />
     <button>Send</button>
 </form>
+
+<!-- 서버로부터 받은 메시지를 표시하는 영역 -->
 <div id="messages"></div>
-<script src='script.js'></script>
+
+<!-- WebSocket 관련 스크립트 로드 -->
+<script src="script.js"></script>
