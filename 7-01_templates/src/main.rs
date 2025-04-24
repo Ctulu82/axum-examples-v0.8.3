@@ -1,10 +1,12 @@
-//! Run with
-//!
+//! Axum에서 Askama 템플릿 엔진을 사용해 서버 사이드 렌더링(SSR) 방식으로 HTML을 동적으로 생성하는 기본 구조를 보여줌.
+//! > Askama: Jinja2 스타일의 Rust 템플릿 엔진.
 //! ```not_rust
 //! cargo run -p example-templates
 //! ```
+//! http://localhost:3000/greet/TaeHyun -> Hello, TaeHyun!
+//!
 
-use askama::Template;
+use askama::Template; // 매크로로 HTML 템플릿과 Rust 구조체를 연결
 use axum::{
     extract,
     http::StatusCode,
@@ -31,24 +33,33 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
         .unwrap();
+
     tracing::debug!("listening on {}", listener.local_addr().unwrap());
+
     axum::serve(listener, app).await.unwrap();
 }
 
 fn app() -> Router {
+    // /greet/{name} 형태의 경로를 등록
     Router::new().route("/greet/{name}", get(greet))
 }
 
 async fn greet(extract::Path(name): extract::Path<String>) -> impl IntoResponse {
+    // URL 경로의 name 값을 추출하고
+    // HelloTemplate에 전달 → Hello, {{ name }}! 을 렌더링
     let template = HelloTemplate { name };
     HtmlTemplate(template)
 }
 
+/// 🎨 템플릿 구조체 선언
+
 #[derive(Template)]
-#[template(path = "hello.html")]
+#[template(path = "hello.html")] // templates/ 디렉토리 기준
 struct HelloTemplate {
     name: String,
 }
+
+/// 🧾 HtmlTemplate<T> → HTML 응답으로 변환
 
 struct HtmlTemplate<T>(T);
 
@@ -97,3 +108,14 @@ mod tests {
         assert_eq!(html, "<h1>Hello, Foo!</h1>");
     }
 }
+
+// 🚀 실행 및 테스트 방법
+//
+// # 실행
+// cargo run -p example-templates
+//
+// # 브라우저에서 확인
+// http://localhost:3000/greet/Axum
+//
+// # 테스트
+// cargo test -p example-templates

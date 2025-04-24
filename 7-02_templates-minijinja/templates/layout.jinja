@@ -1,7 +1,11 @@
+{# layout.jinja – 공통 레이아웃 템플릿 #}
 <!doctype html>
 <html>
+  {# title 블록: 각 페이지가 재정의 가능 #}
   <head><title>{% block title %}Website Name{% endblock %}</title></head>
+  {# body 블록: 각 페이지의 본문 콘텐츠 위치 #}
   <body>
+    {# <nav>: 간단한 네비게이션 메뉴 #}
     <nav>
         <ul>
             <li><a href="/">Home</a></li>

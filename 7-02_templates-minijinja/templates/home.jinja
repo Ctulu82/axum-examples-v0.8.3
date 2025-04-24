@@ -1,6 +1,10 @@
+{# home.jinja – 홈 페이지 #}
 {% extends "layout" %}
+{# {{ super() }}: 상위 템플릿(layout)의 title 블록 값 포함 (Website Name | Home) #}
 {% block title %}{{ super() }} | {{ title }} {% endblock %}
 {% block body %}
+{# {{ title }}: "Home" 문자열이 주입됨 #}
 <h1>{{ title }}</h1>
+{# {{ welcome_text }}: "Hello World!" #}
 <p>{{ welcome_text }}</p>
 {% endblock %}

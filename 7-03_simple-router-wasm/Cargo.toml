@@ -10,7 +10,7 @@ publish = false
 axum = { version = "0.8.3", default-features = false }
 # we don't strictly use axum-extra in this example but wanna make sure that
 # works in wasm as well
-axum-extra = { path = "../../axum-extra", default-features = false }
+axum-extra = { version = "0.10.1", default-features = false }
 futures-executor = "0.3.21"
 http = "1.0.0"
 tower-service = "0.3.1"
