@@ -184,6 +184,7 @@ impl IntoResponse for AppError {
                 // 사용자의 잘못된 입력
                 (rejection.status(), rejection.body_text())
             }
+
             AppError::TimeError(err) => {
                 // 서버 내부 오류 (클라이언트에 자세한 오류 내용 노출 금지)
                 tracing::error!(%err, "error from time_library");

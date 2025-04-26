@@ -1,14 +1,18 @@
 [package]
-name = "example-anyhow-error-response"
-version = "0.1.0"
-edition = "2021"
-publish = false
+name = "example-anyhow-error-response" # 패키지 이름
+version = "0.1.0"                      # 패키지 버전
+edition = "2021"                       # Rust 2021 에디션 사용
+publish = false                        # crates.io로 게시하지 않음
 
 [dependencies]
-anyhow = "1.0"
-axum = "0.8.3"
-tokio = { version = "1.0", features = ["full"] }
+anyhow = "1.0" # 다양한 종류의 에러를 간편하게 다룰 수 있는 에러 핸들링 라이브러리
+axum = "0.8.3" # 비동기 웹 서버 프레임워크
+tokio = { version = "1.0", features = [
+    "full",
+] } # 비동기 런타임 (네트워킹, 타이머 등 풀 기능 활성화)
 
 [dev-dependencies]
-http-body-util = "0.1.0"
-tower = { version = "0.5.2", features = ["util"] }
+http-body-util = "0.1.0" # 테스트용 HTTP 요청/응답 유틸리티 라이브러리
+tower = { version = "0.5.2", features = [
+    "util",
+] } # 미들웨어와 서비스 레이어를 구축하기 위한 프레임워크
