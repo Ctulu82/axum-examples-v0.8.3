@@ -7,38 +7,42 @@
 //! ```
 
 // Axum 프레임워크에서 필요한 모듈들을 임포트합니다.
-// - Html: HTML 응답을 만들기 위한 타입
-// - get: HTTP GET 요청을 위한 라우터 헬퍼
-// - Router: 라우팅 테이블을 정의하는 핵심 구조체
-use axum::{response::Html, routing::get, Router};
+use axum::{
+    response::Html, // Html: HTML 응답을 생성하는 타입
+    routing::get,   // get: HTTP GET 요청을 위한 라우터 헬퍼 함수
+    Router,         // Router: 라우팅 테이블을 정의하는 핵심 구조체
+};
 
 // 메인 비동기 함수입니다.
-// Tokio 런타임을 기반으로 실행됩니다.
+// Tokio 런타임 기반으로 실행됩니다.
 #[tokio::main]
 async fn main() {
     // 1. 라우터 정의
-    // 새로운 Router를 생성하고, 루트 경로("/")에 대해 GET 요청이 들어오면 handler 함수를 호출하도록 설정합니다.
-    let app = Router::new().route("/", get(handler));
+    // 새로운 Router를 생성합니다.
+    let app = Router::new().route(
+        "/",          // 루트 경로("/")에 대해
+        get(handler), // GET 요청이 들어오면 handler 함수를 호출하도록 설정합니다.
+    );
 
     // 2. 서버 바인딩
     // 127.0.0.1:3000 주소에 TCP 리스너를 바인딩합니다.
-    // 실패할 경우 unwrap()으로 즉시 패닉(panic) 발생시킵니다.
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
-        .await
-        .unwrap();
+        .await // 비동기적으로 대기합니다.
+        .unwrap(); // 에러 발생 시 패닉(panic) 처리합니다.
 
-    // 3. 현재 서버가 어떤 주소에서 리스닝 중인지 로그로 출력합니다.
+    // 3. 현재 서버가 리스닝 중인 주소를 출력합니다.
     println!("listening on {}", listener.local_addr().unwrap());
 
     // 4. Axum 서버 실행
-    // 위에서 만든 listener와 라우터(app)를 넘겨서 HTTP 서버를 실행합니다.
-    // `.await.unwrap()`을 통해 비동기 실행 + 에러 발생 시 패닉 처리.
-    axum::serve(listener, app).await.unwrap();
+    // 리스너(listener)와 라우터(app)를 넘겨서 HTTP 서버를 실행합니다.
+    axum::serve(listener, app)
+        .await // 비동기적으로 실행합니다.
+        .unwrap(); // 에러 발생 시 패닉 처리합니다.
 }
 
-// 핸들러 함수입니다.
-// - 요청이 들어오면 호출되는 함수로, HTML 콘텐츠를 반환합니다.
-// - Html<&'static str> 타입은 정적인 HTML 문자열을 감쌉니다.
+/// 요청이 들어오면 호출되는 핸들러 함수입니다.
+/// - Html<&'static str> 타입은 정적인 HTML 문자열을 감쌉니다.
 async fn handler() -> Html<&'static str> {
+    // HTML 콘텐츠를 반환합니다.
     Html("<h1>Hello, World!</h1>")
 }
