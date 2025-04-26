@@ -5,37 +5,39 @@
 //! ```
 
 use axum::{
-    http::StatusCode,
-    response::IntoResponse,
-    routing::{get, post},
-    Json,   // Json: 요청 또는 응답을 JSON 형태로 처리
-    Router, // axum::Router: 라우팅을 구성하는 핵심 객체
+    http::StatusCode,       // HTTP 상태 코드 정의
+    response::IntoResponse, // 핸들러 반환 타입
+    routing::{get, post},   // get, post: HTTP GET, POST 요청용 라우터 생성 함수
+    Json,                   // Json: 요청 또는 응답을 JSON 형태로 처리
+    Router,                 // axum::Router: 라우팅을 구성하는 핵심 객체
 };
-use serde::{Deserialize, Serialize}; // serde: JSON ↔ Rust struct 변환을 위한 직렬화/역직렬화 라이브러리
+use serde::{
+    Deserialize, // serde를 이용해 JSON ↔ Rust struct 변환을 위한 역직렬화
+    Serialize,   // serde를 이용해 JSON ↔ Rust struct 변환을 위한 직렬화
+};
 
 /// 🧵 메인 함수
-
 #[tokio::main]
 async fn main() {
     // 로깅/디버깅 출력을 위한 트레이싱 초기화
     tracing_subscriber::fmt::init();
 
-    // 라우터 생성: GET `/`과 POST `/users` 라우트 추가
+    // 라우터 생성: GET `/`, POST `/users` 라우트를 등록
     let app = Router::new()
-        // `GET /` goes to `root`
-        .route("/", get(root))
-        // `POST /users` goes to `create_user`
-        .route("/users", post(create_user));
+        .route("/", get(root)) // GET / 요청은 root 핸들러로 연결
+        .route("/users", post(create_user)); // POST /users 요청은 create_user 핸들러로 연결
 
     // 127.0.0.1:3000 포트에서 TCP 소켓 바인딩
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
-        .await
-        .unwrap();
+        .await // 비동기적으로 대기합니다.
+        .unwrap(); // 에러 발생 시 패닉(panic) 처리합니다.
 
     tracing::debug!("listening on {}", listener.local_addr().unwrap());
 
     // hyper 기반 서버 실행
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app)
+        .await // 비동기적으로 실행합니다.
+        .unwrap(); // 에러 발생 시 패닉 처리합니다.
 }
 
 /// 📡 GET 핸들러
@@ -47,36 +49,30 @@ async fn root() -> &'static str {
 /// 👤 POST 핸들러
 /// 클라이언트가 /users 경로로 JSON 형태의 POST 요청을 보내면:
 async fn create_user(
-    // this argument tells axum to parse the request body
-    // as JSON into a `CreateUser` type
-    // JSON payload를 CreateUser 구조체로 파싱
+    // 요청 본문을 JSON으로 파싱하여 `CreateUser` 타입으로 변환
     Json(payload): Json<CreateUser>,
 ) -> impl IntoResponse {
-    // insert your application logic here
+    // 받은 username을 이용해 새로운 User 생성
     let user = User {
         id: 1337,
         username: payload.username,
     };
 
-    // this will be converted into a JSON response
-    // with a status code of `201 Created`
-    // 응답은 (201 Created, JSON 응답) 형태로 반환
+    // (201 Created, JSON 응답) 형태로 반환
     (StatusCode::CREATED, Json(user))
 }
 
 // -- 📦 구조체 정의
 
-// the input to our `create_user` handler
-// 클라이언트에서 보낸 JSON 요청 형식
-// 예시: { "username": "taehyun" }
+// 클라이언트가 보낼 JSON 요청 형식
+// 예: { "username": "taehyun" }
 #[derive(Deserialize)]
 struct CreateUser {
     username: String,
 }
 
-// the output to our `create_user` handler
-// 응답 시 서버가 반환하는 JSON 형식
-// 예시: { "id": 1337, "username": "taehyun" }
+// 서버가 응답할 JSON 형식
+// 예: { "id": 1337, "username": "taehyun" }
 #[derive(Serialize)]
 struct User {
     id: u64,

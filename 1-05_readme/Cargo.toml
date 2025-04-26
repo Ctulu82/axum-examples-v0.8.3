@@ -1,12 +1,14 @@
 [package]
-name = "example-readme"
-version = "0.1.0"
-edition = "2021"
-publish = false
+name = "example-readme" # 패키지 이름
+version = "0.1.0"       # 패키지 버전
+edition = "2021"        # Rust 에디션 설정 (2021 버전 사용)
+publish = false         # 크레이트를 crates.io에 게시하지 않음
 
 [dependencies]
-axum = "0.8.3"
-serde = { version = "1.0", features = ["derive"] }
-tokio = { version = "1.0", features = ["full"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+axum = "0.8.3" # 웹 서버 프레임워크 (비동기 지원)
+serde = { version = "1.0", features = ["derive"] } # 직렬화/역직렬화 라이브러리 (구조체 자동 구현)
+tokio = { version = "1.0", features = ["full"] } # 비동기 런타임 (풀 기능 활성화)
+tracing = "0.1" # 비동기 친화적인 로깅 라이브러리
+tracing-subscriber = { version = "0.3", features = [
+    "env-filter",
+] } # 로깅 설정 및 필터링 기능 지원

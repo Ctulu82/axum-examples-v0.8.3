@@ -23,6 +23,7 @@ use tracing_subscriber::{
     util::SubscriberInitExt, // 서브스크라이버 초기화 기능
 };
 
+/// ✨ 메인 함수: 서버 실행
 #[tokio::main]
 async fn main() {
     // ✨ 로그 필터 설정 (환경변수 OR 기본 디버그 레벨)
@@ -45,13 +46,15 @@ async fn main() {
 
     // ✨ TCP 리스너 바인딩 및 Axum 서버 실행
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
-        .await
-        .unwrap();
+        .await // 비동기적으로 대기합니다.
+        .unwrap(); // 에러 발생 시 패닉(panic) 처리합니다.
 
     tracing::debug!("listening on {}", listener.local_addr().unwrap());
 
     // ✨ Axum 서버를 실행하여 요청 수신
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app)
+        .await // 비동기적으로 실행합니다.
+        .unwrap(); // 에러 발생 시 패닉 처리합니다.
 }
 
 // ✨ 라우터 구성 함수

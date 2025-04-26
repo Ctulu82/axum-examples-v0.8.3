@@ -10,24 +10,42 @@
 //! ```
 
 use std::{
-    collections::HashMap,
+    collections::HashMap, // 키-값 쌍을 저장하는 해시맵
     sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc, Mutex,
+        atomic::{AtomicU64, Ordering}, // 원자적 u64 값 (ID 자동 증가용)
+        Arc,
+        Mutex, // 스레드 안전한 공유 메모리
     },
 };
 
+// -- ✨ 외부 라이브러리(axum, tower-http 등) 임포트
 use axum::{
-    extract::{rejection::JsonRejection, FromRequest, MatchedPath, Request, State},
-    http::StatusCode,
-    response::{IntoResponse, Response},
-    routing::post,
-    Router,
+    extract::{
+        rejection::JsonRejection, // 요청 본문(JSON) 파싱 실패 시 반환되는 에러 타입
+        FromRequest,              // 커스텀 요청 추출기 정의를 위한 트레이트
+        MatchedPath,              // 라우터에서 매칭된 경로 정보를 제공하는 추출기
+        Request,                  // HTTP 요청(Request) 객체
+        State,                    // 요청 처리 핸들러에 앱 상태(AppState)를 주입할 때 사용
+    },
+    http::StatusCode,                   // HTTP 상태 코드(200, 404, 500 등) 상수 정의
+    response::{IntoResponse, Response}, // 핸들러 반환 타입을 HTTP 응답으로 변환하는 트레이트와 실제 응답 타입
+    routing::post,                      // POST 메서드용 라우터 빌더
+    Router,                             // 라우트들을 모아서 앱을 구성하는 메인 객체
 };
-use serde::{Deserialize, Serialize};
-use time_library::Timestamp;
-use tower_http::trace::TraceLayer;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+use serde::{
+    Deserialize, // serde를 이용해 JSON ↔ Rust struct 변환을 위한 역직렬화
+    Serialize,   // serde를 이용해 JSON ↔ Rust struct 변환을 위한 직렬화
+};
+
+use time_library::Timestamp; // 외부 모듈: 시간 관련 데이터 구조체
+use tower_http::trace::TraceLayer; // HTTP 요청/응답 트레이싱 미들웨어
+use tracing_subscriber::{
+    layer::SubscriberExt,    // 트레이싱 구독자 설정 도우미
+    util::SubscriberInitExt, //
+};
+
+// -- ✨ 메인 함수
 
 #[tokio::main]
 async fn main() {
@@ -47,11 +65,11 @@ async fn main() {
 
     // ✨ 라우터 구성
     let app = Router::new()
-        .route("/users", post(users_create)) // POST /users 경로
+        .route("/users", post(users_create)) // POST /users 요청 → users_create 핸들러 연결
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(|req: &Request| {
-                    // 로그용 트레이싱 span 설정
+                    // 각 요청마다 트레이싱 span 설정
                     let method = req.method();
                     let uri = req.uri();
                     let matched_path = req
@@ -61,53 +79,58 @@ async fn main() {
 
                     tracing::debug_span!("request", %method, %uri, matched_path)
                 })
-                .on_failure(()), // 기본 5xx 로깅은 생략 (커스텀 로깅을 사용하므로)
+                .on_failure(()), // 실패 시 기본 5xx 에러 로깅 비활성화 (커스텀 처리 예정)
         )
-        .with_state(state); // 상태 주입
+        .with_state(state); // 앱 상태(AppState)를 공유
 
-    // ✨ 서버 실행
+    // ✨ 127.0.0.1:3000 포트에서 TCP 소켓 바인딩
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
-        .await
-        .unwrap();
+        .await // 비동기적으로 대기합니다.
+        .unwrap(); // 에러 발생 시 패닉(panic) 처리합니다.
+
     tracing::debug!("listening on {}", listener.local_addr().unwrap());
-    axum::serve(listener, app).await.unwrap();
+
+    // hyper 기반 서버 실행
+    axum::serve(listener, app)
+        .await // 비동기적으로 실행합니다.
+        .unwrap(); // 에러 발생 시 패닉 처리합니다.
 }
 
 /// 📦 상태 및 도메인 모델 정의
 
-// ✨ 앱의 글로벌 상태 정의
+// ✨ 앱의 글로벌 상태 구조체
 #[derive(Default, Clone)]
 struct AppState {
-    next_id: Arc<AtomicU64>,               // 유저 ID 자동 증가
-    users: Arc<Mutex<HashMap<u64, User>>>, // 유저 목록 저장소
+    next_id: Arc<AtomicU64>,               // 유저 ID 자동 증가 (스레드 안전)
+    users: Arc<Mutex<HashMap<u64, User>>>, // 유저 목록 (공유 가능한 뮤텍스)
 }
 
-// ✨ 클라이언트로부터 받는 입력 구조체 (JSON 파싱 대상)
+// ✨ 클라이언트에서 받아오는 JSON 요청 구조체
 #[derive(Deserialize)]
 struct UserParams {
-    name: String,
+    name: String, // 유저 이름
 }
 
-// ✨ 응답용 유저 구조체
+// ✨ 서버가 응답할 유저 데이터 구조체
 #[derive(Serialize, Clone)]
 struct User {
-    id: u64,
-    name: String,
-    created_at: Timestamp, // 외부 라이브러리 제공 타입
+    id: u64,               // 유저 ID
+    name: String,          // 유저 이름
+    created_at: Timestamp, // 생성 시각 (외부 라이브러리 타입)
 }
 
-/// 🔄 사용자 생성 라우트 및 커스텀 JSON 추출기
+/// 🔄 사용자 생성 핸들러 및 JSON 래퍼 정의
 
-// ✨ POST /users 요청 처리 핸들러
+// ✨ POST /users 요청을 처리하는 핸들러
 async fn users_create(
-    State(state): State<AppState>,
-    // 커스텀 JSON 추출기 사용
-    AppJson(params): AppJson<UserParams>,
+    State(state): State<AppState>,        // 공유 상태(AppState) 추출
+    AppJson(params): AppJson<UserParams>, // 요청 본문을 UserParams로 추출
 ) -> Result<AppJson<User>, AppError> {
+    // ID 증가
     let id = state.next_id.fetch_add(1, Ordering::SeqCst);
 
-    // 외부 라이브러리 호출 시 오류 가능성 있음
-    let created_at = Timestamp::now()?; // Result → AppError::TimeError로 변환됨
+    // 현재 시간 생성 (실패 가능성 있음)
+    let created_at = Timestamp::now()?; // 실패하면 AppError::TimeError로 변환
 
     let user = User {
         id,
@@ -115,21 +138,21 @@ async fn users_create(
         created_at,
     };
 
-    // 유저 저장
+    // 유저를 상태에 저장
     state.users.lock().unwrap().insert(id, user.clone());
 
-    // JSON으로 응답
+    // 성공적으로 생성된 유저를 JSON 응답
     Ok(AppJson(user))
 }
 
-/// 🧩 커스텀 JSON 추출기와 응답 변환
+/// 🧩 커스텀 JSON 추출기 및 응답 타입
 
-// ✨ AppJson: Json 추출기 및 응답 타입 래퍼
+// ✨ AppJson: Json 추출 및 응답 처리를 위한 래퍼 타입
 #[derive(FromRequest)]
-#[from_request(via(axum::Json), rejection(AppError))] // 실패 시 AppError 반환
+#[from_request(via(axum::Json), rejection(AppError))] // 추출 실패 시 AppError 사용
 struct AppJson<T>(T);
 
-// ✨ 응답으로 변환 가능하게 구현
+// ✨ AppJson을 HTTP 응답으로 변환하는 로직
 impl<T> IntoResponse for AppJson<T>
 where
     axum::Json<T>: IntoResponse,
@@ -139,30 +162,30 @@ where
     }
 }
 
-/// 🚨 공통 에러 타입 정의 및 응답 구현
+/// 🚨 에러 타입 정의 및 처리
 
-// ✨ 앱에서 발생 가능한 에러들을 열거
+// ✨ 앱 전용 에러 타입
 enum AppError {
     JsonRejection(JsonRejection),   // JSON 파싱 실패
-    TimeError(time_library::Error), // 외부 라이브러리 오류
+    TimeError(time_library::Error), // 시간 생성 실패
 }
 
-// ✨ 에러를 HTTP 응답으로 변환
+// ✨ 에러를 HTTP 응답으로 변환하는 로직
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         #[derive(Serialize)]
         struct ErrorResponse {
-            message: String,
+            message: String, // 에러 메시지
         }
 
-        // 상태코드 및 메시지를 결정
+        // 에러에 따른 상태 코드 및 메시지 설정
         let (status, message) = match self {
             AppError::JsonRejection(rejection) => {
-                // 사용자 입력 오류 → 그대로 반환 (로깅은 생략)
+                // 사용자의 잘못된 입력
                 (rejection.status(), rejection.body_text())
             }
             AppError::TimeError(err) => {
-                // 내부 오류는 로그로 기록 (클라이언트에 상세 정보 제공하지 않음)
+                // 서버 내부 오류 (클라이언트에 자세한 오류 내용 노출 금지)
                 tracing::error!(%err, "error from time_library");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
@@ -171,19 +194,19 @@ impl IntoResponse for AppError {
             }
         };
 
-        // 에러 메시지를 JSON으로 응답
+        // 에러 응답 반환
         (status, AppJson(ErrorResponse { message })).into_response()
     }
 }
 
-// ✨ JSON 파싱 실패 → AppError로 자동 변환
+// ✨ JSON 파싱 실패 → AppError로 변환
 impl From<JsonRejection> for AppError {
     fn from(rejection: JsonRejection) -> Self {
         Self::JsonRejection(rejection)
     }
 }
 
-// ✨ 외부 에러 → AppError로 자동 변환
+// ✨ 시간 생성 실패 → AppError로 변환
 impl From<time_library::Error> for AppError {
     fn from(error: time_library::Error) -> Self {
         Self::TimeError(error)
@@ -192,27 +215,29 @@ impl From<time_library::Error> for AppError {
 
 /// ⏱️ 외부 라이브러리 시뮬레이션 (time_library)
 
-// 외부 라이브러리 시뮬레이션
+// ✨ 시간 관련 외부 모듈 (모의)
 mod time_library {
     use serde::Serialize;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     #[derive(Serialize, Clone)]
-    pub struct Timestamp(u64);
+    pub struct Timestamp(u64); // u64 기반 Timestamp
 
     impl Timestamp {
+        // 현재 시간을 생성 (실패할 수도 있음)
         pub fn now() -> Result<Self, Error> {
             static COUNTER: AtomicU64 = AtomicU64::new(0);
 
-            // 세 번 중 한 번은 일부러 실패 (테스트용)
+            // 테스트를 위해 일부러 주기적으로 실패
             if COUNTER.fetch_add(1, Ordering::SeqCst) % 3 == 0 {
                 Err(Error::FailedToGetTime)
             } else {
-                Ok(Self(1337)) // 고정값
+                Ok(Self(1337)) // 고정된 시간값 반환
             }
         }
     }
 
+    // 시간 생성 실패 에러 정의
     #[derive(Debug)]
     pub enum Error {
         FailedToGetTime,
