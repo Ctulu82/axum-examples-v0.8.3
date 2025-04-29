@@ -1,12 +1,22 @@
 [package]
-name = "example-customize-path-rejection"
-version = "0.1.0"
-edition = "2021"
-publish = false
+name = "example-customize-path-rejection" # 패키지 이름
+version = "0.1.0"                         # 패키지 버전
+edition = "2021"                          # Rust 에디션 설정
+publish = false                           # crates.io에 배포하지 않음
 
 [dependencies]
+
+# 웹 서버 프레임워크 Axum
 axum = "0.8.3"
+
+# 직렬화/역직렬화를 위한 Serde (구조체 자동 구현 기능 사용)
 serde = { version = "1.0", features = ["derive"] }
+
+# 비동기 런타임 Tokio (전체 기능 활성화)
 tokio = { version = "1.0", features = ["full"] }
+
+# 애플리케이션 로깅 및 트레이싱을 위한 Tracing
 tracing = "0.1"
+
+# Tracing 설정을 환경변수로 제어할 수 있게 하는 서브스크라이버
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

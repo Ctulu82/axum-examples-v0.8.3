@@ -13,8 +13,7 @@ use axum::{
     Router,                             // 라우트들을 모아서 앱을 구성하는 메인 객체
 };
 
-// -- ✨ 메인 함수
-
+/// ✨ 메인 함수
 #[tokio::main]
 async fn main() {
     // 라우터 생성
@@ -33,7 +32,12 @@ async fn main() {
         .unwrap(); // 에러 발생 시 패닉 처리
 }
 
-// ✨ 요청을 처리하는 핸들러
+/// ✨ 라우터 정의 함수
+fn app() -> Router {
+    Router::new().route("/", get(handler)) // GET / 요청을 handler로 연결
+}
+
+/// ✨ 요청을 처리하는 핸들러
 async fn handler() -> Result<(), AppError> {
     try_thing()?; // try_thing 호출 후 실패하면 ? 연산자로 에러 전파
     Ok(())
@@ -57,11 +61,6 @@ impl IntoResponse for AppError {
         )
             .into_response()
     }
-}
-
-// ✨ 라우터 정의 함수
-fn app() -> Router {
-    Router::new().route("/", get(handler)) // GET / 요청을 handler로 연결
 }
 
 // ✨ From 트레이트를 구현하여 다양한 에러를 AppError로 변환 가능하게 함
